@@ -35,11 +35,18 @@ public class ValidateProcessor implements Processor<String, String> {
 
   private boolean isUpdateAllowed(ItemUpdate itemUpdate) {
     if (itemUpdate.itemDescription.contains(BLACKLIST_KEYWORD)) {
+
+      LOG.info("reject update with blacklist keyword {}", itemUpdate);
       return false;
     }
 
     var lastUpdate = globalAccountStateStore.get(itemUpdate.userId);
-    return !(lastUpdate != null && System.currentTimeMillis() - Long.valueOf(lastUpdate) < 1000);
+
+    var result = !(lastUpdate != null && System.currentTimeMillis() - Long.valueOf(lastUpdate) < 10000);
+    if (!result) {
+      LOG.info("reject update as too close with last update {}", itemUpdate);
+    }
+    return result;
   }
 
   @Override

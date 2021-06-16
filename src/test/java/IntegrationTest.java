@@ -1,4 +1,5 @@
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import java.util.Properties;
@@ -7,22 +8,52 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.junit.BeforeClass;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class IntegrationTest {
-  @Test
-  public void testTopology() {
-    Topology topology = Main.buildTopology();
+  private static final Logger LOG = LoggerFactory.getLogger(IntegrationTest.class);
+
+  private static Topology topology;
+  private static TestInputTopic<String, String> inputTopic;
+  private static TestOutputTopic<String, String> outputTopic;
+
+  @BeforeClass
+  public static void setup() {
+    topology = Main.buildTopology();
     final Properties props =Main.buildProperties();
     TopologyTestDriver testDriver = new TopologyTestDriver(topology, props);
-    TestInputTopic<String, String> inputTopic = testDriver.createInputTopic("new-items", Serdes.String().serializer(), Serdes.String().serializer());
+    inputTopic = testDriver.createInputTopic("new-items", Serdes.String().serializer(), Serdes.String().serializer());
+    outputTopic = testDriver.createOutputTopic("userLastItemUpdated", Serdes.String().deserializer(), Serdes.String().deserializer());
+    LOG.info("\n" + topology.describe().toString());
+  }
 
-    TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic("userLastItemUpdated", Serdes.String().deserializer(), Serdes.String().deserializer());
+  @Test
+  public void firstUpdateIsSuccessful() {
     var beforeInput = System.currentTimeMillis();
-    inputTopic.pipeInput("item1", "{\"userId\": \"user1\", \"itemDescription\": \"first description\"}");
+    inputTopic.pipeInput("item1", "{\"userId\": \"user1\", \"itemDescription\": \"item 1 first description\"}");
 
+    assertFalse(outputTopic.isEmpty());
     var record = outputTopic.readKeyValue();
     assertEquals(record.key, "user1");
     assertTrue(Long.valueOf(record.value) > beforeInput);
+  }
+
+  @Test
+  public void updateWithBlacklistKeywordIsRejected() {
+    inputTopic.pipeInput("item1", "{\"userId\": \"user1\", \"itemDescription\": \"item 1 first description BLACKLIST_KEYWORD\"}");
+
+    assertTrue(outputTopic.isEmpty());
+  }
+
+  @Test
+  public void tooCloseUpdateIsRejected() {
+    inputTopic.pipeInput("item1", "{\"userId\": \"user2\", \"itemDescription\": \"item 1 first description\"}");
+    inputTopic.pipeInput("item2", "{\"userId\": \"user2\", \"itemDescription\": \"item 2 first description\"}");
+
+    assertFalse(outputTopic.isEmpty());
+    assertTrue(outputTopic.getQueueSize() == 1);
   }
 }

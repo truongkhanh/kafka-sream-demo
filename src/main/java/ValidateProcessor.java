@@ -7,12 +7,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class ValidateProcessor implements Processor<String, String> {
+
   public static final String BLACKLIST_KEYWORD = "BLACKLIST_KEYWORD";
+  private static final Logger LOG = LoggerFactory.getLogger(ValidateProcessor.class);
+  private static final ObjectMapper MAPPER = new ObjectMapper();
   private ReadOnlyKeyValueStore<String, String> globalAccountStateStore;
   private ProcessorContext context;
-  private static final Logger LOG = LoggerFactory.getLogger(ValidateProcessor.class);
-
-  private static final ObjectMapper MAPPER = new ObjectMapper();
 
   @Override
   public void init(ProcessorContext context) {
@@ -42,7 +42,7 @@ public class ValidateProcessor implements Processor<String, String> {
 
     var lastUpdate = globalAccountStateStore.get(itemUpdate.userId);
 
-    var result = !(lastUpdate != null && System.currentTimeMillis() - Long.valueOf(lastUpdate) < 10000);
+    var result = !(lastUpdate != null && context.timestamp() - Long.valueOf(lastUpdate) < 1000);
     if (!result) {
       LOG.info("reject update as too close with last update {}", itemUpdate);
     }

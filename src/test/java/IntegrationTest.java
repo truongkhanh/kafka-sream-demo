@@ -14,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class IntegrationTest {
+
   private static final Logger LOG = LoggerFactory.getLogger(IntegrationTest.class);
 
   private static Topology topology;
@@ -23,37 +24,63 @@ public class IntegrationTest {
   @BeforeClass
   public static void setup() {
     topology = Main.buildTopology();
-    final Properties props =Main.buildProperties();
+    final Properties props = Main.buildProperties();
     TopologyTestDriver testDriver = new TopologyTestDriver(topology, props);
-    inputTopic = testDriver.createInputTopic("new-items", Serdes.String().serializer(), Serdes.String().serializer());
-    outputTopic = testDriver.createOutputTopic("userLastItemUpdated", Serdes.String().deserializer(), Serdes.String().deserializer());
+    inputTopic = testDriver.createInputTopic("new-item-updates", Serdes.String().serializer(),
+        Serdes.String().serializer());
+    outputTopic = testDriver
+        .createOutputTopic("user-last-item-updated", Serdes.String().deserializer(),
+            Serdes.String().deserializer());
     LOG.info("\n" + topology.describe().toString());
   }
 
   @Test
   public void firstUpdateIsSuccessful() {
-    var beforeInput = System.currentTimeMillis();
-    inputTopic.pipeInput("item1", "{\"userId\": \"user1\", \"itemDescription\": \"item 1 first description\"}");
+    Long eventTimestamp = System.currentTimeMillis();
+    inputTopic.pipeInput("item1",
+        "{\"itemId\": \"item1\", \"userId\": \"user1\", \"itemDescription\": \"item 1 first description\"}",
+        eventTimestamp);
 
     assertFalse(outputTopic.isEmpty());
     var record = outputTopic.readKeyValue();
     assertEquals(record.key, "user1");
-    assertTrue(Long.valueOf(record.value) > beforeInput);
+    assertEquals(eventTimestamp, Long.valueOf(record.value));
   }
 
   @Test
   public void updateWithBlacklistKeywordIsRejected() {
-    inputTopic.pipeInput("item1", "{\"userId\": \"user1\", \"itemDescription\": \"item 1 first description BLACKLIST_KEYWORD\"}");
+    inputTopic.pipeInput("item1",
+        "{\"itemId\": \"item1\", \"userId\": \"user1\", \"itemDescription\": \"item 1 first description BLACKLIST_KEYWORD\"}");
 
     assertTrue(outputTopic.isEmpty());
   }
 
   @Test
   public void tooCloseUpdateIsRejected() {
-    inputTopic.pipeInput("item1", "{\"userId\": \"user2\", \"itemDescription\": \"item 1 first description\"}");
-    inputTopic.pipeInput("item2", "{\"userId\": \"user2\", \"itemDescription\": \"item 2 first description\"}");
+    var now = System.currentTimeMillis();
+    inputTopic.pipeInput("item1",
+        "{\"itemId\": \"item1\", \"userId\": \"user2\", \"itemDescription\": \"item 1 first description\"}",
+        now);
+    inputTopic.pipeInput("item2",
+        "{\"itemId\": \"item2\", \"userId\": \"user2\", \"itemDescription\": \"item 2 first description\"}",
+        now + 1);
 
     assertFalse(outputTopic.isEmpty());
-    assertTrue(outputTopic.getQueueSize() == 1);
+    assertEquals(1, outputTopic.getQueueSize());
+  }
+
+  @Test
+  public void notTooCloseUpdateIsAccepted() {
+    var now = System.currentTimeMillis();
+    inputTopic.pipeInput("item1",
+        "{\"itemId\": \"item1\", \"userId\": \"user3\", \"itemDescription\": \"item 1 first description\"}",
+        now);
+    inputTopic.pipeInput("item2",
+        "{\"itemId\": \"item2\", \"userId\": \"user3\", \"itemDescription\": \"item 2 first description\"}",
+        now + 10000);
+
+    assertFalse(outputTopic.isEmpty());
+    var records = outputTopic.readRecordsToList();
+    assertEquals(2, records.size());
   }
 }

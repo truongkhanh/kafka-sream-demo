@@ -8,9 +8,13 @@ public class ItemUpdate {
   @JsonProperty("itemDescription")
   public String itemDescription;
 
+  @JsonProperty("itemId")
+  public String itemId;
+
   @Override
   public String toString() {
     return "ItemUpdate{" +
+        "itemId='" + itemId + '\'' +
         "userId='" + userId + '\'' +
         ", itemDescription='" + itemDescription + '\'' +
         '}';

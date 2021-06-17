@@ -9,10 +9,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class Main {
+
   private static final Logger LOG = LoggerFactory.getLogger(Main.class);
+
   public static void main(final String[] args) {
     final Topology builder = buildTopology();
-
 
     Properties props = buildProperties();
     final KafkaStreams streams = new KafkaStreams(builder, props);
@@ -37,20 +38,20 @@ public class Main {
     final String updateItemProcessorName = "Update Item Node";
     final String sinkName = "Last Update Per User";
 
-    final String userLastItemUpdatedTopic = "userLastItemUpdated";
+    final String userLastItemUpdatedTopic = "user-last-item-updated";
     final String userLastItemUpdatedGlobalStore = "userLastItemUpdated";
     final String userLastItemUpdatedSourceNode = "userLastItemUpdated";
 
     final var userLastItemUpdatedGlobalStoreBuilder = Stores.keyValueStoreBuilder(
         Stores.inMemoryKeyValueStore(userLastItemUpdatedGlobalStore),
         Serdes.String(),
-        Serdes.String()).withLoggingDisabled();;
+        Serdes.String()).withLoggingDisabled();
 
-
-    builder.addSource(sourceName, "new-items");
+    builder.addSource(sourceName, "new-item-updates");
 
     builder.addProcessor(validateProcessorName, () -> new ValidateProcessor(), sourceName);
-    builder.addProcessor(updateItemProcessorName, () -> new UpdateItemProcessor(), validateProcessorName);
+    builder.addProcessor(updateItemProcessorName, () -> new UpdateItemProcessor(),
+        validateProcessorName);
     builder.addSink(
         sinkName,
         userLastItemUpdatedTopic,
